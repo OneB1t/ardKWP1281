@@ -32,7 +32,7 @@ A4 --- Arduino 20x4 LCD display SDA
 
 //#define DEBUG 1
 
-LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x20 for a 16 chars and 2 line display
+LiquidCrystal_I2C lcd(0x3F,20,4);  // set the LCD address to 0x20 for a 16 chars and 2 line display
 NewSoftwareSerial obd(pinKLineRX, pinKLineTX, false); // RX, TX, inverse logic
 
 uint8_t currAddr = 0; // aktualne ctena adresa
