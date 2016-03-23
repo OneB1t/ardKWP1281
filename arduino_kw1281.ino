@@ -8,7 +8,11 @@ A5 --- Arduino 20x4 LCD display SCL
 A4 --- Arduino 20x4 LCD display SDA                                                                            
 */
 
-#include <Wire.h>
+// https://www.blafusel.de/obd/obd2_kw1281.html -- KWP1281 info
+// http://grauonline.de/wordpress/?p=74 -- Alexander's car diagnostic
+// https://github.com/OneB1t/ardKWP1281 -- repository with this fork of Alexander's car diagnostic
+
+#include "WireN.h"
 #include "LiquidCrystal_I2C.h"
 #include "NewSoftwareSerial.h"
 
@@ -19,9 +23,6 @@ A4 --- Arduino 20x4 LCD display SDA
 #define pin 9
 #define pinButton 10
 
-
-// https://www.blafusel.de/obd/obd2_kw1281.html
-
 #define ADR_Engine 0x01
 #define ADR_Gears  0x02
 #define ADR_ABS_Brakes 0x03
@@ -29,8 +30,6 @@ A4 --- Arduino 20x4 LCD display SDA
 #define ADR_Dashboard 0x17
 #define ADR_Immobilizer 0x25
 #define ADR_Central_locking 0x35
-
-//#define DEBUG 1
 
 LiquidCrystal_I2C lcd(0x3F,20,4);  // set the LCD address to 0x20 for a 16 chars and 2 line display
 NewSoftwareSerial obd(pinKLineRX, pinKLineTX, false); // RX, TX, inverse logic
@@ -44,7 +43,9 @@ int sensorCounter = 0;
 int pageUpdateCounter = 0;
 int alarmCounter = 0;
 
-uint8_t currPage = 1;
+uint8_t currPage = 5;
+uint8_t unitAddress = 1;
+unsigned long start, finished, elapsed;
 
 
 int8_t coolantTemp = 0; // teplota chladici kapaliny
@@ -67,6 +68,12 @@ uint8_t vehicleSpeed = 0; // rychlost vozidla
 uint8_t fuelConsumption = 0; // aktualni spotreba paliva
 uint8_t fuelLevel = 0; // zbyvajici palivo
 unsigned long odometer = 0; // ujeta vzdalenost
+
+int8_t debug1 = 0;
+int8_t debug2 = 0;
+int8_t debug3 = 0;
+int8_t debug4 = 0;
+
 
 
 String floatToString(float v){
@@ -96,10 +103,6 @@ void lcdPrint(int x, int y, String s){
 }
 
 void obdWrite(uint8_t data){
-#ifdef DEBUG
-  Serial.print("uC:");
-  Serial.println(data, HEX);
-#endif
   obd.write(data);
 }
 
@@ -107,17 +110,13 @@ uint8_t obdRead(){
   unsigned long timeout = millis() + 1000;  
   while (!obd.available()){
     if (millis() >= timeout) {
-      Serial.println(F("ERROR: obdRead timeout"));
+      //Serial.println(F("ERROR: obdRead timeout"));
       disconnect();      
       errorTimeout++;
       return 0;
     }
   }
   uint8_t data = obd.read();
-#ifdef DEBUG  
-  Serial.print(F("ECU:"));
-  Serial.println(data, HEX);
-#endif  
   return data;
 }
 
@@ -137,14 +136,6 @@ void send5baud(uint8_t data){
         bit = (byte) ((data & (1 << (i-1))) != 0);
         even = even ^ bit;
       }
-    Serial.print(F("bit"));      
-    Serial.print(i);          
-    Serial.print(F("="));              
-    Serial.print(bit);
-    if (i == 0) Serial.print(F(" startbit"));
-      else if (i == 8) Serial.print(F(" parity"));    
-      else if (i == 9) Serial.print(F(" stopbit"));              
-    Serial.println();      
     bits[i]=bit;
   }
   // now send bit stream    
@@ -167,40 +158,18 @@ void send5baud(uint8_t data){
 
 
 bool KWP5BaudInit(uint8_t addr){
-  Serial.println(F("---KWP 5 baud init"));
-  //delay(3000);
   send5baud(addr);
   return true;
 }
 
 
 bool KWPSendBlock(char *s, int size){
-  Serial.print(F("---KWPSend sz="));
-  Serial.print(size);
-  Serial.print(F(" blockCounter="));
-  Serial.println(blockCounter);    
-  // show data
-  Serial.print(F("OUT:"));
-  for (int i=0; i < size; i++){    
-    uint8_t data = s[i];
-    Serial.print(data, HEX);
-    Serial.print(" ");    
-  }  
-  Serial.println();
   for (int i=0; i < size; i++){
     uint8_t data = s[i];    
     obdWrite(data);
-    /*uint8_t echo = obdRead();  
-    if (data != echo){
-      Serial.println(F("ERROR: invalid echo"));
-      disconnect();
-      errorData++;
-      return false;
-    }*/
     if (i < size-1){
       uint8_t complement = obdRead();        
       if (complement != (data ^ 0xFF)){
-        Serial.println(F("ERROR: invalid complement"));
         disconnect();
         errorData++;
         return false;
@@ -217,15 +186,9 @@ bool KWPReceiveBlock(char s[], int maxsize, int &size){
   bool ackeachbyte = false;
   uint8_t data = 0;
   int recvcount = 0;
-  if (size == 0) ackeachbyte = true;
-  Serial.print(F("---KWPReceive sz="));
-  Serial.print(size);
-  Serial.print(F(" blockCounter="));
-  Serial.println(blockCounter);
-  if (size > maxsize) {
-    Serial.println("ERROR: invalid maxsize");
-    return false;
-  }  
+  if (size == 0) 
+    ackeachbyte = true;
+
   unsigned long timeout = millis() + 1000;  
   while ((recvcount == 0) || (recvcount != size)) {
     while (obd.available()){      
@@ -235,13 +198,13 @@ bool KWPReceiveBlock(char s[], int maxsize, int &size){
       if ((size == 0) && (recvcount == 1)) {
         size = data + 1;
         if (size > maxsize) {
-          Serial.println("ERROR: invalid maxsize");
+          //Serial.println("ERROR: invalid maxsize");
           return false;
         }  
       }
       if ((ackeachbyte) && (recvcount == 2)) {
         if (data != blockCounter){
-          Serial.println(F("ERROR: invalid blockCounter"));
+          //Serial.println(F("ERROR: invalid blockCounter"));
           disconnect();
           errorData++;
           return false;
@@ -261,59 +224,41 @@ bool KWPReceiveBlock(char s[], int maxsize, int &size){
       timeout = millis() + 1000;        
     } 
     if (millis() >= timeout){
-      Serial.println(F("ERROR: timeout"));
       disconnect();
       errorTimeout++;
       return false;
     }
   }
-  // show data
-  Serial.print(F("IN: sz="));  
-  Serial.print(size);  
-  Serial.print(F(" data="));  
-  for (int i=0; i < size; i++){
-    uint8_t data = s[i];
-    Serial.print(data, HEX);
-    Serial.print(F(" "));    
-  }  
-  Serial.println();
   blockCounter++;
   return true;
 }
 
 bool KWPSendAckBlock(){
+  /*
   Serial.print(F("---KWPSendAckBlock blockCounter="));
   Serial.println(blockCounter);  
+  */
   char buf[32];  
   sprintf(buf, "\x03%c\x09\x03", blockCounter);  
   return (KWPSendBlock(buf, 4));
 }
 
-bool connect(uint8_t addr, int baudrate){  
-  Serial.print(F("------connect addr="));
-  Serial.print(addr);
-  Serial.print(F(" baud="));  
-  Serial.println(baudrate);  
-  tone(pin, 1200);    
-  delay(100);
-  noTone(pin);            
-  //lcd.clear();
-  lcdPrint(0,0, F("KW1281 wakeup"), 20);
-  lcdPrint(0,1, "", 20);
-  lcdPrint(0,2, "", 20);  
+bool connect(uint8_t addr, int baudrate){            
+  lcd.clear();
+  lcdPrint(0,0, String(F("KW1281 PRIPOJUJI ")) + String(addr), 20);
   blockCounter = 0;  
   currAddr = 0;
   obd.begin(baudrate);       
   KWP5BaudInit(addr);
   // answer: 0x55, 0x01, 0x8A          
   char s[3];
-  lcdPrint(0,0, F("KW1281 recv"), 20);
+  lcdPrint(0,0, F("KW1281 PRIJEM DAT"), 20);
   int size = 3;
   if (!KWPReceiveBlock(s, 3, size)) return false;
   if (    (((uint8_t)s[0]) != 0x55) 
      ||   (((uint8_t)s[1]) != 0x01) 
      ||   (((uint8_t)s[2]) != 0x8A)   ){
-    Serial.println(F("ERROR: invalid magic"));
+    //Serial.println(F("ERROR: invalid magic"));
     disconnect();
     errorData++;
     return false;
@@ -326,8 +271,8 @@ bool connect(uint8_t addr, int baudrate){
   
 bool readConnectBlocks(){  
   // read connect blocks
-  Serial.println(F("------readconnectblocks"));
-  lcdPrint(0,0, F("KW1281 label"), 20);
+  //Serial.println(F("------readconnectblocks"));
+  lcdPrint(0,0, F("KW1281 PRIPOJENO"), 20);
   String info;  
   while (true){
     int size = 0;
@@ -336,7 +281,7 @@ bool readConnectBlocks(){
     if (size == 0) return false;
     if (s[2] == '\x09') break; 
     if (s[2] != '\xF6') {
-      Serial.println(F("ERROR: unexpected answer"));
+      //Serial.println(F("ERROR: unexpected answer"));
       disconnect();
       errorData++;
       return false;
@@ -345,31 +290,27 @@ bool readConnectBlocks(){
     info += text.substring(3, size-2);
     if (!KWPSendAckBlock()) return false;
   }
-  Serial.print("label=");
-  Serial.println(info);
+  lcd.clear();
   //lcd.setCursor(0, 1);
   //lcd.print(info);      
   return true;
 }
 
 bool readSensors(int group){
-  Serial.print(F("------readSensors "));
-  Serial.println(group);
-  lcdPrint(0,0, F("KW1281 sensor"), 20);  
+  //Serial.print(F("------readSensors "));
+  //Serial.println(group); 
   char s[64];
   sprintf(s, "\x04%c\x29%c\x03", blockCounter, group);
   if (!KWPSendBlock(s, 5)) return false;
   int size = 0;
   KWPReceiveBlock(s, 64, size);
   if (s[2] != '\xe7') {
-    Serial.println(F("ERROR: invalid answer"));
+    //Serial.println(F("ERROR: invalid answer"));
     disconnect();
     errorData++;
     return false;
   }
   int count = (size-4) / 3;
-  Serial.print(F("count="));
-  Serial.println(count);
   for (int idx=0; idx < count; idx++)
   {
       byte k=s[3 + idx*3];
@@ -377,13 +318,13 @@ bool readSensors(int group){
       byte b=s[3 + idx*3+2];
       String n;
       float v = 0;
-      Serial.print(F("type="));
+    /*  Serial.print(F("type="));
       Serial.print(k);
       Serial.print(F("  a="));
       Serial.print(a);
       Serial.print(F("  b="));
       Serial.print(b);
-      Serial.print(F("  text="));
+      Serial.print(F("  text=")); */
       String t = "";
       String units = "";
       char buf[32];    
@@ -453,7 +394,21 @@ bool readSensors(int group){
         case 70: v=(256*a +b)*0.192;      units=F("m/s^2");break;
         default: sprintf(buf, "%2x, %2x      ", a, b); break;
       }
-      
+      switch(idx)
+      {
+        case 0:
+          debug1 = v;
+          break;
+        case 1:
+          debug2 = v;
+        break;
+        case 2:
+          debug3 = v;
+        break;
+        case 3:
+          debug4 = v;
+        break;
+      }
       switch (currAddr){
         case ADR_Engine: 
           switch(group)
@@ -469,18 +424,18 @@ bool readSensors(int group){
                  switch (idx)
                  {
                     case 0: engineSpeed = v; break;
-                    case 1: injectedQuantityAct=v; break;
-                    case 2: fuelConsumption =v; break;
-                    case 3: injectedQuantitySpec=v; break;
+                    case 1: injectedQuantityAct = v; break;
+                    case 2: fuelConsumption = v; break;
+                    case 3: injectedQuantitySpec = v; break;
                  }              
             break;
             case 11: 
                 switch (idx)
                 {
-                  case 1: turboBoostSpec=v; break;
-                  case 2: turboBoostAct=v; break;
+                  case 1: turboBoostSpec = v; break;
+                  case 2: turboBoostAct = v; break;
                 }              
-                break;
+                break;          
           }
           break;
         case ADR_Dashboard: 
@@ -512,17 +467,9 @@ bool readSensors(int group){
           }
           break;
       }
-      if (units.length() != 0){
-        dtostrf(v,4, 2, buf); 
-        t=String(buf) + " " + units;
-      }          
-      Serial.println(t);
-      
-      //lcd.setCursor(0, idx);      
-      //while (t.length() < 20) t += " ";
-      //lcd.print(t);      
     }
   sensorCounter++;
+
   return true;
 }
 
@@ -536,47 +483,72 @@ void updateDisplay(){
     }
   } else {
     switch (currPage){
-      case 1:      
-        if (coolantTemp > 99)
-        {
-          lcdPrint(0,1, F("COOL"));                
-        }
-        else
-        {
-          lcdPrint(0,1, F("cool"));
-        }
-        
-        lcdPrint(6,1,String(coolantTemp),3);                
-         
-        if ( (oilTemp > 99) || ((oilPressure != 30) && (oilPressure != 31)) ){          
-          lcdPrint(10,1,F("OIL "));
-          
-        } else lcdPrint(10,1,F("oil "));        
-        lcdPrint(14,1,String(oilPressure),3);        
-        lcdPrint(0,2, F("rpm "));
-        lcdPrint(4,2, String(engineSpeed),4);        
-        lcdPrint(10,2, F("km/h "));
-        lcdPrint(15,2, String(vehicleSpeed, 3));        
-        lcdPrint(0,3, F("fuel "));
-        lcdPrint(5,3, String(fuelLevel),3);        
-        lcdPrint(10,3, F("odo "));
-        lcdPrint(14,3, String(odometer),6);                        
+      case 1:      // budiky
+          lcdPrint(0,0, F("TEPLOTA MOTORU: "));                
+          lcdPrint(15,0,String(coolantTemp) + "C",3);                
+          lcdPrint(0,1,F("TLAK OLEJE: "));
+          lcdPrint(15,1,String(oilPressure),3);        
+          lcdPrint(0,2, F("OTACKY MOTORU: "));
+          lcdPrint(15,2, String(engineSpeed),4);        
+          lcdPrint(0,3, F("RYCHLOST: "));
+          lcdPrint(15,3, String(vehicleSpeed, 3) + "km/h");      
         break;
-      case 2:
-        if (coolantTemp > 99){
-          lcdPrint(0,1, F("COOL"));               
-        } else lcdPrint(0,1, F("cool"));
-        lcdPrint(6,1,String(coolantTemp),3);                    
-        lcdPrint(10,1, F("air "));          
-        lcdPrint(14,1, String(intakeAirTemp), 3);                  
-        lcdPrint(0,2, F("rpm "));
-        lcdPrint(4,2, String(engineSpeed),4);        
-        lcdPrint(10,2, F("km/h "));
-        lcdPrint(15,2, String(vehicleSpeed, 3));                
-        lcdPrint(0,3, F("fuel "));
-        lcdPrint(5,3, String(fuelConsumption),3);                
-        lcdPrint(10,3, F("volt "));
-        lcdPrint(15,3, String(supplyVoltage),5);                                        
+      case 2:                   
+          lcdPrint(10,1, F("air "));          
+          lcdPrint(14,1, String(intakeAirTemp), 3);                  
+          lcdPrint(0,2, F("rpm "));
+          lcdPrint(4,2, String(engineSpeed),4);        
+          lcdPrint(10,2, F("km/h "));
+          lcdPrint(15,2, String(vehicleSpeed, 3));                
+          lcdPrint(0,3, F("fuel "));
+          lcdPrint(5,3, String(fuelConsumption),3);                
+          lcdPrint(10,3, F("volt "));
+          lcdPrint(15,3, String(supplyVoltage),5);                                        
+        break;
+        case 3:
+          lcdPrint(0,0, F("TURBO SPEC:"), 20);  
+          lcdPrint(6,0,String(turboBoostSpec),3);                    
+          lcdPrint(0,2, F("TURBO AKT:"), 20);
+          lcdPrint(10,3, F("mbar "));                                           
+        break;
+        case 4:
+          lcdPrint(0,0, F("MFA SPEC mbar:"), 20);  
+          lcdPrint(16,0,String(MAFSpec),3);
+          lcdPrint(0,1, F("MFA AKT mbar:"), 20);  
+          lcdPrint(16,1,String(MAFAct),3);
+        break;
+        case 5:
+          lcdPrint(0,0, String(F("JEDNOTKA BUDIKU")),20);
+          lcdPrint(0,1, String(F("DEBUG -- KANAL: ")) + String(unitAddress), 20);  
+          lcdPrint(7,2,String(debug1),4);                    
+          lcdPrint(12,2, String(debug2),4);      
+          lcdPrint(7,3,String(debug3),4);                    
+          lcdPrint(12,3, String(debug4),4);
+        break;     
+        case 6:
+          lcdPrint(0,0, String(F("    JEDNOTKA MOTORU")),20);
+          lcdPrint(0,1, String(F("DEBUG -- KANAL: ")) + String(unitAddress), 20);  
+          lcdPrint(7,2,String(debug1),4);                    
+          lcdPrint(12,2, String(debug2),4);      
+          lcdPrint(7,3,String(debug3),4);                    
+          lcdPrint(12,3, String(debug4),4);
+        break;     
+        case 7:
+          lcdPrint(0,0, F("OTACKY MOTORU:"));
+          lcdPrint(16,0, String(engineSpeed),4);        
+          lcdPrint(0,1, F("VSTRIK. MNOZST. AKT.:"), 20);  
+          lcdPrint(16,1,String(injectedQuantityAct),3);
+          lcdPrint(0,2, F("VSTRIK. MNOZST. SPEC.:"), 20);  
+          lcdPrint(16,2,String(injectedQuantitySpec),3);
+          lcdPrint(0,3, F("AKTUALNI SPOTREBA l/h:"), 20);  
+          lcdPrint(16,3, String(fuelConsumption),3);
+        break;
+        case 8:https://github.com/OneB1t/ardKWP1281
+          lcdPrint(0,0, F("OTACKY MOTORU:"));
+          lcdPrint(16,0, String(engineSpeed),4);        
+          lcdPrint(0,1, F("OKAMZITY VYKON KW:"));
+          lcdPrint(16,1, String((injectedQuantityAct * 0.0462 * engineSpeed / 2) / 60),4);    
+          // vstrikovane mnozstvi * vykon za mg nafty * otacky/min          
         break;
     }    
   }
@@ -584,9 +556,14 @@ void updateDisplay(){
 }
 
 void setup(){      
-  lcd.init();  
+  delay(100);
+  lcd.init(); 
+  delay(100);
+  lcd.init(); 
+  delay(100);
+  lcd.init(); 
+  delay(500); 
   lcd.backlight();      
-  lcd.init();  
     
   pinMode(pinKLineTX, OUTPUT);  
   digitalWrite(pinKLineTX, HIGH);  
@@ -594,15 +571,12 @@ void setup(){
   pinMode(pinButton, INPUT);  
   pinMode(pinButton, INPUT_PULLUP);  
     
-  Serial.begin(9600);  
-  Serial.println(F("SETUP"));            
-        
-  Serial.println(F("START"));       
+  //Serial.begin(9600);        
 }
 
 
 void loop(){    
- currPage = 1;
+start = millis();
   switch (currPage){
     case 1:      
       if (currAddr != ADR_Dashboard){        
@@ -620,13 +594,58 @@ void loop(){
         readSensors(3);
         readSensors(11);
       }    
+      break;     
+      case 3:
+      if (currAddr != ADR_Engine) {
+        connect(ADR_Engine, 10400);
+      } else {
+        readSensors(3);
+      }   
       break;   
-  }        
-  
+      case 4:
+      if (currAddr != ADR_Engine) {
+        connect(ADR_Engine, 10400);
+      } else {
+        readSensors(11);
+      }   
+      break; 
+      case 5:
+      if (currAddr != ADR_Dashboard){        
+        connect(ADR_Dashboard, 10400);
+      } else  {
+        readSensors(unitAddress);   
+        lcdPrint(0,3,String(elapsed));
+      }      
+      break;
+      case 6:
+      if (currAddr != ADR_Engine){        
+        connect(ADR_Dashboard, 10400);
+      } else  {
+        readSensors(unitAddress);
+      }      
+      break;
+      case 7:
+      if (currAddr != ADR_Engine){        
+        connect(ADR_Dashboard, 10400);
+      } else  {
+        readSensors(15);
+      }      
+      break;
+      case 8:
+      if (currAddr != ADR_Engine){        
+        connect(ADR_Dashboard, 10400);
+      } else  {
+        readSensors(15);
+      }      
+      break;
+  }    
+       if (Serial.available() > 0){
+       currPage = Serial.parseInt(); //read int or parseFloat for ..float...
+       if(currPage > 8)
+        currPage = 1;
+       lcd.clear();
+}
+  finished=millis();  
+  elapsed=finished-start;
   updateDisplay();          
 }
-
-
-
-
-
