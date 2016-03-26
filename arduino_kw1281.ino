@@ -12,7 +12,7 @@ A4 --- Arduino 20x4 LCD display SDA
 // http://grauonline.de/wordpress/?p=74 -- Alexander's car diagnostic
 // https://github.com/OneB1t/ardKWP1281 -- repository with this fork of Alexander's car diagnostic
 
-#include "WireN.h"
+#include <Wire.h>
 #include "LiquidCrystal_I2C.h"
 #include "NewSoftwareSerial.h"
 
@@ -21,7 +21,10 @@ A4 --- Arduino 20x4 LCD display SDA
 
 #define pinLED 13
 #define pin 9
-#define pinButton 10
+
+#define pinButton 4
+#define pinButton2 5
+#define pinButton3 6
 
 #define ADR_Engine 0x01
 #define ADR_Gears  0x02
@@ -39,9 +42,6 @@ uint8_t blockCounter = 0; //
 uint8_t errorTimeout = 0;
 uint8_t errorData = 0;
 bool connected = false;
-int sensorCounter = 0;
-int pageUpdateCounter = 0;
-int alarmCounter = 0;
 
 uint8_t currPage = 5;
 uint8_t unitAddress = 1;
@@ -189,7 +189,7 @@ bool KWPReceiveBlock(char s[], int maxsize, int &size){
   if (size == 0) 
     ackeachbyte = true;
 
-  unsigned long timeout = millis() + 1000;  
+  unsigned long timeout = millis() + 2000;   // this is important while switching pages to correctly reconnect to unit
   while ((recvcount == 0) || (recvcount != size)) {
     while (obd.available()){      
       data = obdRead();
@@ -212,14 +212,6 @@ bool KWPReceiveBlock(char s[], int maxsize, int &size){
       }
       if ( ((!ackeachbyte) && (recvcount == size)) ||  ((ackeachbyte) && (recvcount < size)) ){
         obdWrite(data ^ 0xFF);  // send complement ack        
-        /*uint8_t echo = obdRead();        
-        if (echo != (data ^ 0xFF)){
-          Serial.print(F("ERROR: invalid echo "));
-          Serial.println(echo, HEX);
-          disconnect();
-          errorData++;
-          return false;
-        }*/
       }
       timeout = millis() + 1000;        
     } 
@@ -234,10 +226,6 @@ bool KWPReceiveBlock(char s[], int maxsize, int &size){
 }
 
 bool KWPSendAckBlock(){
-  /*
-  Serial.print(F("---KWPSendAckBlock blockCounter="));
-  Serial.println(blockCounter);  
-  */
   char buf[32];  
   sprintf(buf, "\x03%c\x09\x03", blockCounter);  
   return (KWPSendBlock(buf, 4));
@@ -259,7 +247,7 @@ bool connect(uint8_t addr, int baudrate){
      ||   (((uint8_t)s[1]) != 0x01) 
      ||   (((uint8_t)s[2]) != 0x8A)   ){
     //Serial.println(F("ERROR: invalid magic"));
-    disconnect();
+    connected = false;
     errorData++;
     return false;
   }
@@ -297,8 +285,6 @@ bool readConnectBlocks(){
 }
 
 bool readSensors(int group){
-  //Serial.print(F("------readSensors "));
-  //Serial.println(group); 
   char s[64];
   sprintf(s, "\x04%c\x29%c\x03", blockCounter, group);
   if (!KWPSendBlock(s, 5)) return false;
@@ -318,13 +304,6 @@ bool readSensors(int group){
       byte b=s[3 + idx*3+2];
       String n;
       float v = 0;
-    /*  Serial.print(F("type="));
-      Serial.print(k);
-      Serial.print(F("  a="));
-      Serial.print(a);
-      Serial.print(F("  b="));
-      Serial.print(b);
-      Serial.print(F("  text=")); */
       String t = "";
       String units = "";
       char buf[32];    
@@ -468,8 +447,6 @@ bool readSensors(int group){
           break;
       }
     }
-  sensorCounter++;
-
   return true;
 }
 
@@ -543,7 +520,7 @@ void updateDisplay(){
           lcdPrint(0,3, F("AKTUALNI SPOTREBA l/h:"), 20);  
           lcdPrint(16,3, String(fuelConsumption),3);
         break;
-        case 8:https://github.com/OneB1t/ardKWP1281
+        case 8:
           lcdPrint(0,0, F("OTACKY MOTORU:"));
           lcdPrint(16,0, String(engineSpeed),4);        
           lcdPrint(0,1, F("OKAMZITY VYKON KW:"));
@@ -552,18 +529,12 @@ void updateDisplay(){
         break;
     }    
   }
-  pageUpdateCounter++;
 }
 
 void setup(){      
-  delay(100);
   lcd.init(); 
-  delay(100);
-  lcd.init(); 
-  delay(100);
-  lcd.init(); 
-  delay(500); 
-  lcd.backlight();      
+  lcd.backlight();   
+  lcd.init();    
     
   pinMode(pinKLineTX, OUTPUT);  
   digitalWrite(pinKLineTX, HIGH);  
@@ -579,7 +550,8 @@ void loop(){
 start = millis();
   switch (currPage){
     case 1:      
-      if (currAddr != ADR_Dashboard){        
+      if (currAddr != ADR_Dashboard){ 
+        digitalWrite(pinKLineTX, HIGH);         
         connect(ADR_Dashboard, 10400);
       } else  {
         readSensors(1);
@@ -589,6 +561,7 @@ start = millis();
       break;
     case 2:
       if (currAddr != ADR_Engine) {
+        digitalWrite(pinKLineTX, HIGH);  
         connect(ADR_Engine, 10400);
       } else {
         readSensors(3);
@@ -597,6 +570,7 @@ start = millis();
       break;     
       case 3:
       if (currAddr != ADR_Engine) {
+        digitalWrite(pinKLineTX, HIGH);  
         connect(ADR_Engine, 10400);
       } else {
         readSensors(3);
@@ -604,13 +578,15 @@ start = millis();
       break;   
       case 4:
       if (currAddr != ADR_Engine) {
+        digitalWrite(pinKLineTX, HIGH);  
         connect(ADR_Engine, 10400);
       } else {
         readSensors(11);
       }   
       break; 
       case 5:
-      if (currAddr != ADR_Dashboard){        
+      if (currAddr != ADR_Dashboard){    
+        digitalWrite(pinKLineTX, HIGH);      
         connect(ADR_Dashboard, 10400);
       } else  {
         readSensors(unitAddress);   
@@ -619,32 +595,36 @@ start = millis();
       break;
       case 6:
       if (currAddr != ADR_Engine){        
-        connect(ADR_Dashboard, 10400);
+        digitalWrite(pinKLineTX, HIGH);  
+        connect(ADR_Engine, 10400);
       } else  {
         readSensors(unitAddress);
       }      
       break;
       case 7:
-      if (currAddr != ADR_Engine){        
-        connect(ADR_Dashboard, 10400);
+      if (currAddr != ADR_Engine){       
+        digitalWrite(pinKLineTX, HIGH);   
+        connect(ADR_Engine, 10400);
       } else  {
         readSensors(15);
       }      
       break;
       case 8:
-      if (currAddr != ADR_Engine){        
-        connect(ADR_Dashboard, 10400);
+      if (currAddr != ADR_Engine){       
+        digitalWrite(pinKLineTX, HIGH);   
+        connect(ADR_Engine, 10400);
       } else  {
         readSensors(15);
       }      
       break;
   }    
-       if (Serial.available() > 0){
-       currPage = Serial.parseInt(); //read int or parseFloat for ..float...
-       if(currPage > 8)
-        currPage = 1;
-       lcd.clear();
-}
+  if(digitalRead(pinButton) == HIGH)
+  {
+   currPage++;
+   if(currPage > 8)
+    currPage = 1;
+  }
+   
   finished=millis();  
   elapsed=finished-start;
   updateDisplay();          
