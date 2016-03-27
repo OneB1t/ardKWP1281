@@ -43,7 +43,7 @@ uint8_t errorTimeout = 0;
 uint8_t errorData = 0;
 bool connected = false;
 
-uint8_t currPage = 5;
+uint8_t currPage = 1;
 uint8_t unitAddress = 1;
 unsigned long start, finished, elapsed;
 
@@ -58,7 +58,7 @@ int8_t MAFSpec = 0; // pozadovana vaha vzduchu
 int8_t MAFAct = 0; // aktualni vaha vzduchu
 int8_t injectedQuantityAct = 0; // aktualni vstrikovane mnozstvi paliva
 int8_t injectedQuantitySpec = 0; // pozadovane mnozstvi paliva
-float consumption = 0; // spotreba
+float actConsumption = 0; // spotreba
 int8_t remainingDistance = 0; // dojezdova vzdalenost
 float engineLoad = 0; // zatez motoru
 int   engineSpeed = 0; // otacky
@@ -73,6 +73,20 @@ int8_t debug1 = 0;
 int8_t debug2 = 0;
 int8_t debug3 = 0;
 int8_t debug4 = 0;
+
+float stabCyl1 = 0;
+float stabCyl2 = 0;
+float stabCyl3 = 0;
+float stabCyl4 = 0;
+
+int8_t frontLeftWheel = 0;
+int8_t frontRightWheel = 0;
+int8_t rearLeftWheel = 0;
+int8_t rearRightWheel = 0;
+
+float fuelTemperature = 0;
+float intakeAirTemperature = 0;
+float coolantTemperature = 0;
 
 
 
@@ -233,20 +247,21 @@ bool KWPSendAckBlock(){
 
 bool connect(uint8_t addr, int baudrate){            
   lcd.clear();
-  lcdPrint(0,0, String(F("KW1281 PRIPOJUJI ")) + String(addr), 20);
+  lcdPrint(0,0, String(F("VYBRANA STRANA: ")) + String(currPage), 20);
+  lcdPrint(0,1, String(F("KW1281 JEDNOTKA: ")) + String(addr), 20);
   blockCounter = 0;  
   currAddr = 0;
   obd.begin(baudrate);       
   KWP5BaudInit(addr);
   // answer: 0x55, 0x01, 0x8A          
   char s[3];
-  lcdPrint(0,0, F("KW1281 PRIJEM DAT"), 20);
+  lcdPrint(0,1, F("KW1281 PRIJEM DAT"), 20);
   int size = 3;
   if (!KWPReceiveBlock(s, 3, size)) return false;
   if (    (((uint8_t)s[0]) != 0x55) 
      ||   (((uint8_t)s[1]) != 0x01) 
      ||   (((uint8_t)s[2]) != 0x8A)   ){
-    //Serial.println(F("ERROR: invalid magic"));
+    lcdPrint(0,1, F("KW1281 JEDNOTKA NEKOMUNIKUJE"), 20);
     connected = false;
     errorData++;
     return false;
@@ -386,7 +401,6 @@ bool readSensors(int group){
         break;
         case 3:
           debug4 = v;
-        break;
       }
       switch (currAddr){
         case ADR_Engine: 
@@ -395,10 +409,37 @@ bool readSensors(int group){
               case 3: 
                  switch (idx)
                  {
+                    case 0: engineSpeed = v; break;
                     case 1: MAFSpec=v; break;
                     case 2: MAFAct =v; break;
                  }              
               break;
+              case 7:
+                 switch (idx)
+                 {
+                    case 0: fuelTemperature = v; break;
+                    case 1: intakeAirTemperature =v; break;
+                    case 2: coolantTemperature = v; break;
+                 }              
+              break;
+
+            case 11: 
+                switch (idx)
+                {
+                  case 0: engineSpeed = v; break;
+                  case 1: turboBoostSpec = v; break;
+                  case 2: turboBoostAct = v; break;
+                }              
+                break;       
+            case 13: 
+                switch (idx) // STABILIZACE VOLNOBEHU
+                {
+                  case 0: stabCyl1 = v; break;
+                  case 1: stabCyl2 = v; break;
+                  case 2: stabCyl3 = v; break;
+                  case 3: stabCyl4 = v; break;
+                }              
+                break;       
             case 15: 
                  switch (idx)
                  {
@@ -408,13 +449,6 @@ bool readSensors(int group){
                     case 3: injectedQuantitySpec = v; break;
                  }              
             break;
-            case 11: 
-                switch (idx)
-                {
-                  case 1: turboBoostSpec = v; break;
-                  case 2: turboBoostAct = v; break;
-                }              
-                break;          
           }
           break;
         case ADR_Dashboard: 
@@ -460,15 +494,11 @@ void updateDisplay(){
     }
   } else {
     switch (currPage){
-      case 1:      // budiky
-          lcdPrint(0,0, F("TEPLOTA MOTORU: "));                
+      case 1:      // budiky          
           lcdPrint(15,0,String(coolantTemp) + "C",3);                
-          lcdPrint(0,1,F("TLAK OLEJE: "));
           lcdPrint(15,1,String(oilPressure),3);        
-          lcdPrint(0,2, F("OTACKY MOTORU: "));
           lcdPrint(15,2, String(engineSpeed),4);        
-          lcdPrint(0,3, F("RYCHLOST: "));
-          lcdPrint(15,3, String(vehicleSpeed, 3) + "km/h");      
+          lcdPrint(13,3, String(vehicleSpeed, 3) + "km/h");      
         break;
       case 2:                   
           lcdPrint(10,1, F("air "));          
@@ -482,51 +512,45 @@ void updateDisplay(){
           lcdPrint(10,3, F("volt "));
           lcdPrint(15,3, String(supplyVoltage),5);                                        
         break;
-        case 3:
-          lcdPrint(0,0, F("TURBO SPEC:"), 20);  
-          lcdPrint(6,0,String(turboBoostSpec),3);                    
-          lcdPrint(0,2, F("TURBO AKT:"), 20);
-          lcdPrint(10,3, F("mbar "));                                           
+        case 3: // TLAK TURBA - SPECIFIKOVANY A REALNY
+          lcdPrint(0,0, F("TURBO SPEC:"), 20);                     
+          lcdPrint(0,2, F("TURBO AKT:"), 20);                                      
         break;
-        case 4:
-          lcdPrint(0,0, F("MFA SPEC mbar:"), 20);  
+        case 4: // MFA
           lcdPrint(16,0,String(MAFSpec),3);
-          lcdPrint(0,1, F("MFA AKT mbar:"), 20);  
           lcdPrint(16,1,String(MAFAct),3);
-        break;
-        case 5:
-          lcdPrint(0,0, String(F("JEDNOTKA BUDIKU")),20);
-          lcdPrint(0,1, String(F("DEBUG -- KANAL: ")) + String(unitAddress), 20);  
-          lcdPrint(7,2,String(debug1),4);                    
-          lcdPrint(12,2, String(debug2),4);      
-          lcdPrint(7,3,String(debug3),4);                    
-          lcdPrint(12,3, String(debug4),4);
-        break;     
-        case 6:
-          lcdPrint(0,0, String(F("    JEDNOTKA MOTORU")),20);
-          lcdPrint(0,1, String(F("DEBUG -- KANAL: ")) + String(unitAddress), 20);  
-          lcdPrint(7,2,String(debug1),4);                    
-          lcdPrint(12,2, String(debug2),4);      
-          lcdPrint(7,3,String(debug3),4);                    
-          lcdPrint(12,3, String(debug4),4);
-        break;     
-        case 7:
-          lcdPrint(0,0, F("OTACKY MOTORU:"));
+        break;   
+        case 5: // OTACKY - VSTRIKOVANE PALIVO - SPOTREBA
           lcdPrint(16,0, String(engineSpeed),4);        
-          lcdPrint(0,1, F("VSTRIK. MNOZST. AKT.:"), 20);  
           lcdPrint(16,1,String(injectedQuantityAct),3);
-          lcdPrint(0,2, F("VSTRIK. MNOZST. SPEC.:"), 20);  
           lcdPrint(16,2,String(injectedQuantitySpec),3);
-          lcdPrint(0,3, F("AKTUALNI SPOTREBA l/h:"), 20);  
           lcdPrint(16,3, String(fuelConsumption),3);
         break;
-        case 8:
-          lcdPrint(0,0, F("OTACKY MOTORU:"));
+        case 6: // OTACKY - AKTUALNI VYKON
           lcdPrint(16,0, String(engineSpeed),4);        
-          lcdPrint(0,1, F("OKAMZITY VYKON KW:"));
           lcdPrint(16,1, String((injectedQuantityAct * 0.0462 * engineSpeed / 2) / 60),4);    
+          lcdPrint(16,2, String(injectedQuantityAct),4);  
           // vstrikovane mnozstvi * vykon za mg nafty * otacky/min          
         break;
+        case 7: // TEPLOTY
+          lcdPrint(16,0, String(fuelTemperature),4);        
+          lcdPrint(16,1,String(intakeAirTemperature),3);
+          lcdPrint(16,2,String(coolantTemperature),3);
+        break;
+        case 8: // ABS rychlost kol
+          lcdPrint(16,0, String(frontLeftWheel),3);        
+          lcdPrint(16,1,String(frontRightWheel),3);
+          lcdPrint(16,2,String(rearLeftWheel),3);
+          lcdPrint(16,3,String(rearRightWheel),3);
+        break;
+        case 50:  // DEBUG BUDIKU
+        case 51:  // DEBUG MOTORU
+        case 52:  // DEBUG ABS
+          lcdPrint(8,2,String(debug1),4);                    
+          lcdPrint(12,2, String(debug2),4);      
+          lcdPrint(8,3,String(debug3),4);                    
+          lcdPrint(12,3, String(debug4),4);
+        break;  
     }    
   }
 }
@@ -551,8 +575,12 @@ start = millis();
   switch (currPage){
     case 1:      
       if (currAddr != ADR_Dashboard){ 
-        digitalWrite(pinKLineTX, HIGH);         
-        connect(ADR_Dashboard, 10400);
+        
+        connect(ADR_Dashboard, 10400);          
+          lcdPrint(0,0, F("TEPLOTA MOTORU: "));                            
+          lcdPrint(0,1,F("TLAK OLEJE: ")); 
+          lcdPrint(0,2, F("OTACKY MOTORU: "));      
+          lcdPrint(0,3, F("RYCHLOST: "));
       } else  {
         readSensors(1);
         readSensors(2);
@@ -561,7 +589,7 @@ start = millis();
       break;
     case 2:
       if (currAddr != ADR_Engine) {
-        digitalWrite(pinKLineTX, HIGH);  
+        
         connect(ADR_Engine, 10400);
       } else {
         readSensors(3);
@@ -570,53 +598,100 @@ start = millis();
       break;     
       case 3:
       if (currAddr != ADR_Engine) {
-        digitalWrite(pinKLineTX, HIGH);  
         connect(ADR_Engine, 10400);
+        lcdPrint(0,0, F("TURBO SPEC:"), 20);                    
+        lcdPrint(0,2, F("TURBO AKT:"), 20);  
       } else {
         readSensors(3);
       }   
       break;   
       case 4:
       if (currAddr != ADR_Engine) {
-        digitalWrite(pinKLineTX, HIGH);  
         connect(ADR_Engine, 10400);
+        lcdPrint(0,0, F("MFA SPEC mbar:"), 20);  
+        lcdPrint(0,1, F("MFA AKT mbar:"), 20);  
       } else {
         readSensors(11);
       }   
       break; 
       case 5:
+      if (currAddr != ADR_Engine){       
+        connect(ADR_Engine, 10400);
+        lcdPrint(0,0, F("OTACKY MOTORU:"));     
+        lcdPrint(0,1, F("VSTRIK. MNOZST. AKT.:"), 20);  
+        lcdPrint(0,2, F("VSTRIK. MNOZST. SPEC.:"), 20);  
+        lcdPrint(0,3, F("AKTUALNI SPOTREBA l/h:"), 20);  
+      } else  {
+        readSensors(15);
+      }      
+      break;
+      case 6:
+      if (currAddr != ADR_Engine){       
+        connect(ADR_Engine, 10400);
+        lcdPrint(0,0, F("OTACKY MOTORU:"));
+        lcdPrint(0,1, F("OKAMZITY VYKON KW:"));
+        lcdPrint(0,2, F("VSTRIKOVANE PALIVO:"));
+      } else  {
+        readSensors(15);
+      }      
+      break;
+      case 7:
+      if (currAddr != ADR_Engine){       
+        connect(ADR_Engine, 10400);
+        lcdPrint(0,0, F("TEPLOTA NAFTY:"));
+        lcdPrint(0,1, F("TEPLOTA V SANI:"));
+        lcdPrint(0,2, F("CHLADICI KAPALINA:"));
+      } else  {
+        readSensors(7);
+      }      
+      break;
+      case 8:
+      if(currAddr != ADR_ABS_Brakes)
+      {
+        connect(ADR_ABS_Brakes, 10400);
+        lcdPrint(0,0, F("LEVE PREDNI KOLO:"));
+        lcdPrint(0,1, F("PRAVE PREDNI KOLO:"));
+        lcdPrint(0,2, F("LEVE ZADNI KOLO:"));
+        lcdPrint(0,2, F("PRAVE ZADNI KOLO:"));
+      } else  {
+        readSensors(1);
+      }              
+      break;
+
+      // THIS SECTION IS ONLY AVAILABE IF ENABLED
+      case 50:
       if (currAddr != ADR_Dashboard){    
-        digitalWrite(pinKLineTX, HIGH);      
+        
         connect(ADR_Dashboard, 10400);
+        lcdPrint(0,0, String(F("JEDNOTKA BUDIKU")),20);
+        lcdPrint(0,1, String(F("DEBUG -- KANAL: ")) + String(unitAddress), 20);  
       } else  {
         readSensors(unitAddress);   
         lcdPrint(0,3,String(elapsed));
       }      
       break;
-      case 6:
+      case 51:
       if (currAddr != ADR_Engine){        
-        digitalWrite(pinKLineTX, HIGH);  
+        
         connect(ADR_Engine, 10400);
+        lcdPrint(0,0, String(F("    JEDNOTKA MOTORU")),20);
+        lcdPrint(0,1, String(F("DEBUG -- KANAL: ")) + String(unitAddress), 20);  
       } else  {
         readSensors(unitAddress);
       }      
       break;
-      case 7:
-      if (currAddr != ADR_Engine){       
-        digitalWrite(pinKLineTX, HIGH);   
-        connect(ADR_Engine, 10400);
+      case 52:
+      if (currAddr != ADR_ABS_Brakes){        
+        
+        connect(ADR_ABS_Brakes, 10400);
+        lcdPrint(0,0, String(F("    JEDNOTKA ABS")),20);
+        lcdPrint(0,1, String(F("DEBUG -- KANAL: ")) + String(unitAddress), 20);  
       } else  {
-        readSensors(15);
+        readSensors(unitAddress);
       }      
       break;
-      case 8:
-      if (currAddr != ADR_Engine){       
-        digitalWrite(pinKLineTX, HIGH);   
-        connect(ADR_Engine, 10400);
-      } else  {
-        readSensors(15);
-      }      
-      break;
+
+      
   }    
   if(digitalRead(pinButton) == HIGH)
   {
@@ -624,7 +699,12 @@ start = millis();
    if(currPage > 8)
     currPage = 1;
   }
-   
+  else if(digitalRead(pinButton2) == HIGH)
+  {
+   currPage--;
+   if(currPage < 0)
+    currPage = 8;
+  }   
   finished=millis();  
   elapsed=finished-start;
   updateDisplay();          

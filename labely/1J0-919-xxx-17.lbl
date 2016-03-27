@@ -1,0 +1,232 @@
+;
+; VCDS Label File
+;
+; Copyright © 2004-2010 Ross-Tech, LLC
+;
+; VW Golf IV / Bora / Jetta IV (1J)
+;
+; Component: J285 - Instrument Cluster (#17)
+;
+; P/N: 1J0-919-???-???
+;
+; includes measuring blocks, adaptation, coding, login and service reset
+;
+; This file is part of a redirection package,
+; make sure you have all of the following files.
+;
+; 1J-17.LBL
+; 1J0-919-xxx-17.LBL
+; 1J0-920-xx0-17.LBL
+; 1J0-920-xx5-17.LBL
+;
+; created on 10/Oct/2004 by Sebastian Stange (Sebastian@Ross-Tech.com)
+;
+; last modification on 18/Aug/2010
+;
+; requires VCDS 908.0 or newer
+;
+;
+;---------------------------------------------------
+;
+; measuring blocks
+;
+;---------------------------------------------------
+;
+;
+001,0,General
+001,1,Vehicle Speed
+001,2,Engine Speed
+001,3,Oil Pressure,Switch 2,Range: Oil Pr. 2 <min / Oil Pr. 2 OK
+001,4,Time
+;
+002,0,General
+002,1,Odometer
+002,2,Fuel Level
+002,3,Fuel Sender,Resistance
+002,4,Ambient,Temperature
+;
+003,0,General
+003,1,Coolant,Temperature
+;
+020,0,Immobilizer - ID Block 1
+020,1,Digit 1 && 2
+020,2,Digit 3 && 4
+020,3,Digit 5 && 6
+020,4,Digit 7 && 8
+;
+021,0,Immobilizer - ID Block 2
+021,1,Digit 9 && 10
+021,2,Digit 11 && 12
+021,3,Digit 13 && 14
+;
+022,0,Immobilizer I
+022,1,Engine Start,permitted,Specification: 1 = Yes\nRange: 0 = No / 1 = Yes
+022,2,Engine (ECU),responds,Specification: 1 = Yes\nRange: 0 = No / 1 = Yes
+022,3,Key Status,,Specification: 1 = Key OK\nRange: 0 = Key not OK / 1 = Key OK
+022,4,Number of,adapted Keys,Specification: 1...4
+;
+023,0,Immobilizer II
+023,1,Variable Code,authorized,Specification: 1 = Yes\nRange: 0 = No / 1 = Yes
+023,2,Key Status,(Transponder),Range: 0 = Not Locked / 1 = Locked
+023,3,Fixed Code,authorized,Specification: 1 = Yes\nRange: 0 = No / 1 = Yes
+;
+050,0,General
+050,1,Odometer
+050,2,Engine Speed
+050,3,Oil Temperature
+050,4,Coolant,Temperature
+;
+;
+;---------------------------------------------------
+;
+; adaptation
+;
+;---------------------------------------------------
+;
+;
+A002,0,Service Reminder
+A002,5,Service Reminder
+A002,6,0 = Service NOT Due
+A002,7,1 = Service Due
+A002,8, 
+A002,9,To reset the service reminder save 0 as new value.
+;
+A003,0,Consumption Correction
+A003,5,Consumption Correction
+A003,6,Standard Value: 100 %
+A003,7,Display Range: 85...115 %
+A003,8,Increments: 1 %
+A003,9, 
+A003,10,Calculation based on volume per distance (e.g. l/100km):
+A003,11,New Adaptation Value = Old Adaptation Value * Calculated Consumption / Old Display Value
+A003,12,Calculation based on distance per volume (e.g. MPG):
+A003,13,New Adaptation Value = Old Adaptation Value * Old Display Value / Calculated Consumption 
+;
+A004,0,Language
+A004,5,Language
+A004,6,1 = German
+A004,7,2 = English
+A004,8,3 = French
+A004,9,4 = Italian
+A004,10,5 = Spanish
+A004,11,6 = Portuguese
+A004,12,8 = Czech
+;
+A5,0,Service reminder - Maximum distance for oil change "OIL"
+A5,5,Service reminder - Maximum distance for oil change (in 1000km)
+A5,6,15 - 15.000km (Standard)
+;
+A6,0,Service reminder - Maximum distance "INSP 01"
+A6,5,Service reminder - Maximum distance (in 1000km)
+A6,6,30 - 30.000km (Standard)
+;
+A7,0,Service reminder - Maximum time "INSP 02"
+A7,5,Service reminder - Maximum time (in 10 Days)
+A7,6,36 - 360 Days (Standard)
+;
+A009,0,Mileage/Odometer
+A009,5,Mileage/Odometer
+A009,6,Increments: 1 = 10 km
+A009,9,The distance can only be changed once until
+A009,10,the current value is not over 100 km.
+A009,11, 
+A009,12,NOTE: Perform Login first.
+;
+A10,0,Service reminder - Distance for oil change "OIL"
+A10,5,Service reminder - Distance for oil change (in 1000km)
+A10,6,15 - 15.000km (Standard)
+;
+A11,0,Service reminder - Distance "INSP 01"
+A11,5,Service reminder - Distance (in 1000km)
+A11,6,30 - 30.000km (Standard)
+;
+A12,0,Service reminder - Time "INSP 02"
+A12,5,Service reminder - Time (in 10 Days)
+A12,6,36 - 360 Days (Standard)
+;
+A016,0,Distance Impulse Number
+;
+A021,0,Immobilizer - Key Adaptation
+A021,5,Immobilizer - Key Adaptation
+;
+A030,0,Tank Characteristic (Fuel Level Sensor)
+A030,5,Tank Characteristic (Fuel Level Sensor)
+A030,6,This channel is used to set the fuel gauge reserve mark
+A030,7,therfor fill the tank with 7 l of fuel and correct the
+A030,8,needle to hit the reserve mark. This is a parallel shift
+A030,9,of the tank characteristic.
+A030,10, 
+A030,11,Standard: 128
+A030,12,Range: 120...136 (-2.0...+2.0 l)
+A030,13,Increments: 1 = 1 Ohm = 1/4 l
+;
+A035,0,Speed Threshold
+A035,5,Speed Threshold
+A035,6,This value represents the speed threshold of the
+A035,7,dynamic oil pressure system. The threshold can be
+A035,8,raised in increments of 250 RPM.
+;
+;
+;---------------------------------------------------
+;
+; login
+;
+;---------------------------------------------------
+;
+;
+L00,Instrument Cluster (J285) Login
+L01,13861 = Adaptation Enabling
+;
+;
+;---------------------------------------------------
+;
+; coding
+;
+;---------------------------------------------------
+;
+;
+C00,Instrument Cluster (J285) Coding
+C01,??xxx: Options
+C02,+01 = Brakepad Warning active
+C03,+02 = Seatbelt Warning active
+C04,+04 = Washer Fluid Warning active
+C05,+16 = Secondary Display (Radio/Navigation) active
+C06,xx?xx: Country
+C07,1 = Europe / 2 = USA
+C08,3 = Canada/Mexico/Latin America
+C09,4 = Great Britain (GB) / 5 = Japan
+C10,6 = Saudi Arabia / 7 = Australia
+C11,xxx?x: Cylinders
+C12,4 = 4-Cylinders
+C13,5 = 5-Cylinders
+C14,6 = 6-Cylinders
+C15,xxxxx?: Distance Impulse Number (K-Value)
+C16,1 = 4345 Impulses/Km or 6991 Impulses/Mi
+C17,2 = 3528 Impulses/Km or 5677 Impulses/Mi
+C18,3 = 4134 Impulses/Km or 6651 Impulses/Mi
+C19,4 = 3648 Impulses/Km or 5870 Impulses/Mi
+;
+;
+;---------------------------------------------------
+;
+; service reset
+;
+;---------------------------------------------------
+;
+;
+RD,10,ST_DNOC,1000,km
+RD,11,ST_DTI,1000,km
+RD,12,ST_TTI,10,DAYS
+;
+RJ,0,0,Service Reset (Oil Service),,
+RJ,0,1,10,15
+;
+RJ,1,0,Service Reset (Inspection),,
+RJ,1,1,10,15
+RJ,1,2,11,30
+;
+RJ,2,0,Service Reset (Oil Service & Inspection),,
+RJ,2,1,10,15
+RJ,2,2,11,30
+RJ,2,3,12,36
+;

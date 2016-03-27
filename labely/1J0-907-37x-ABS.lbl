@@ -1,0 +1,81 @@
+;
+; VCDS Label File
+;
+; Copyright © 2005-2011 Ross-Tech, LLC
+;
+; Audi A3 (8L) / VW Golf IV (1J) / VW New Beetle (1C/9C/1Y)
+;
+; component: J104 - Brake Electronics (#03) - MK20 ABS
+;
+; p/n: 1J0-907-37?-???
+;
+; includes measuring blocks, basic setting and misc
+;
+; This file is part of a label file package,
+; make sure you have all of the following files.
+;
+; 1J-03.LBL
+; 1J0-907-37x-ABS.LBL
+; 1J0-907-37x-ESP-A.LBL
+; 1J0-907-37x-ESP-F.LBL
+;
+; created on 03/Jun/2005 by Sebastian Stange (sebastian@ross-tech.com)
+;
+; last modification on 08/Jun/2011
+;
+; requires VCDS 11.2.1 or newer
+;
+;
+;---------------------------------------------------
+;
+; measuring blocks & basic setting
+;
+;---------------------------------------------------
+;
+;
+001,0,Current Wheel Speed (Basic Setting: Brake Pump Bleeding)
+001,1,Speed Sensor,Front Left (G47),Specification: 0.0...255.0 km/h
+001,2,Speed Sensor,Front Right (G45),Specification: 0.0...255.0 km/h
+001,3,Speed Sensor,Rear Left (G46),Specification: 0.0...255.0 km/h
+001,4,Speed Sensor,Rear Right (G44),Specification: 0.0...255.0 km/h
+;
+B001,0,Brake Pump Bleeding
+B001,1,Status &,Instructions, 
+B001,2, , , 
+B001,3, , , 
+B001,4, , , 
+;
+002,0,Starting Wheel Speed
+002,1,Speed Sensor,Front Left (G47),Specification: 0.0...254.0 km/h (255.0 km/h = standing)
+002,2,Speed Sensor,Front Right (G45),Specification: 0.0...254.0 km/h (255.0 km/h = standing)
+002,3,Speed Sensor,Rear Left (G46),Specification: 0.0...254.0 km/h (255.0 km/h = standing)
+002,4,Speed Sensor,Rear Right (G44),Specification: 0.0...254.0 km/h (255.0 km/h = standing)
+;
+003,0,Brake Light Switch
+003,1,Brake Light,Switch (F),Specification: not oper./operated
+;
+125,0,CAN-Databus Communication (Powertrain)
+125,1,Engine
+125,3,All Wheel Drive
+125,4,Transmission
+;
+;
+;---------------------------------------------------
+;
+; coding
+;
+;---------------------------------------------------
+;
+;
+;C00,Brake Electronics (J104/MK20 ESP FWD) Coding
+;
+;
+;---------------------------------------------------
+;
+; misc
+;
+;---------------------------------------------------
+;
+;
+SN,MK20 ABS FWD
+;
