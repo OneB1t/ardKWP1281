@@ -56,7 +56,6 @@ unsigned long start, finished, elapsed;
 
 int8_t coolantTemp = 0; // teplota chladici kapaliny
 int8_t oilTemp = 0; // teplota oleje
-int8_t intakeAirTemp = 0; // teplota v sani
 int8_t oilPressure = 0; // tlak oleje
 int8_t turboBoostSpec = 0; // pozadovany tlak turba
 int8_t turboBoostAct = 0; // aktualni tlak turba
@@ -90,8 +89,8 @@ int8_t frontRightWheel = 0;
 int8_t rearLeftWheel = 0;
 int8_t rearRightWheel = 0;
 
+float intakeAirTemp = 0; // teplota v sani
 float fuelTemperature = 0;
-float intakeAirTemperature = 0;
 float coolantTemperature = 0;
 
 
@@ -231,7 +230,7 @@ bool KWPReceiveBlock(char s[], int maxsize, int &size){
       if ( ((!ackeachbyte) && (recvcount == size)) ||  ((ackeachbyte) && (recvcount < size)) ){
         obdWrite(data ^ 0xFF);  // send complement ack        
       }
-      timeout = millis() + 1000;        
+      timeout = millis() + 1200;        
     } 
     if (millis() >= timeout){
       disconnect();
@@ -421,7 +420,7 @@ bool readSensors(int group){
                  switch (idx)
                  {
                     case 0: fuelTemperature = v; break;
-                    case 1: intakeAirTemperature =v; break;
+                    case 1: intakeAirTemp =v; break;
                     case 2: coolantTemperature = v; break;
                  }              
               break;
@@ -487,6 +486,24 @@ bool readSensors(int group){
   return true;
 }
 
+String insertEmptyChars(String enter)
+{
+  String values = "";
+  if(enter.length() == 1)
+  {
+    values = "   ";
+  }
+  if(enter.length() == 2)
+  {
+    values = "  ";
+  }
+  if(enter.length() == 3)
+  {
+    values = " ";
+  }
+  return values;
+}
+
 void updateDisplay(){
   if (!connected){
     if ( (errorTimeout != 0) || (errorData != 0) ){
@@ -498,11 +515,11 @@ void updateDisplay(){
   } else {
     switch (currPage){
       case 1:      // budiky          
-          lcdPrint(0,0,String(F("TEPLOTA  ")) + String(coolantTemp));                
-          lcdPrint(0,1,String(F("TLA OLEJ ")) + String(oilPressure));        
-          lcdPrint(0,2,String(F("OTACKY   ")) + String(engineSpeed));        
-          lcdPrint(0,3,String(F("RYCHLOST ")) +  String(vehicleSpeed));      
-          lcdPrint(0,4,String(F("TEP OLEJ ")) +  String(oilTemp));  
+          lcdPrint(0,0,String(F("TEPLOTA  ")) + String(coolantTemp) + insertEmptyChars(String(coolantTemp)));                
+          lcdPrint(0,1,String(F("TLA OLEJ ")) + String(oilPressure) + insertEmptyChars(String(oilPressure)));        
+          lcdPrint(0,2,String(F("OTACKY   ")) + String(engineSpeed) + insertEmptyChars(String(engineSpeed)));        
+          lcdPrint(0,3,String(F("RYCHLOST ")) +  String(vehicleSpeed) + insertEmptyChars(String(vehicleSpeed)));      
+          lcdPrint(0,4,String(F("TEP OLEJ ")) +  String(oilTemp) + insertEmptyChars(String(oilTemp)));  
           lcdPrint(7,5,String(elapsed));
         break;
       case 2:                   
@@ -568,37 +585,7 @@ void setup(){
 
 
 void loop(){    
-start = millis();
-  if(digitalRead(pinButton) == HIGH)
-  {
-   currPage++;
-   connected = false;
-   skipnextread = true;
-   if(currPage > 7)
-   {
-    currPage = 1;   
-   }
-    lcdPrint(0,0, String(F("STRANA: ")) + String(currPage));
-  }
-  else
-  {
-    skipnextread = false;
-  }
-  if(digitalRead(pinButton2) == HIGH)
-  {
-   currPage--;
-   connected = false;
-   skipnextread = true;
-   if(currPage < 0)
-   {
-    currPage = 7;
-   }
-   lcdPrint(0,0, String(F("STRANA: ")) + String(currPage), 20);
-  }   
-    else
-  {
-    skipnextread = false;
-  }
+start = millis();   
   if(!skipnextread)
   {
       switch (currPage){
@@ -693,6 +680,31 @@ start = millis();
 
   finished=millis();  
   elapsed=finished-start;
-  updateDisplay();         
-  }   
+  updateDisplay(); 
+  }
+  skipnextread = false;   
+   if(digitalRead(pinButton) == HIGH)
+  {
+   currPage++;
+   delay(400);
+   connected = false;
+   skipnextread = true;
+   if(currPage > 7)
+   {
+    currPage = 1;   
+   }
+    lcdPrint(0,0, String(F("STRANA: ")) + String(currPage) + "  ");
+  }
+  else if(digitalRead(pinButton2) == HIGH)
+  {
+   currPage--;
+   delay(400);
+   connected = false;
+   skipnextread = true;
+   if(currPage <= 0)
+   {
+    currPage = 7;
+   }
+   lcdPrint(0,0, String(F("STRANA: ")) + String(currPage)  + "  ", 20);
+  }
 }
