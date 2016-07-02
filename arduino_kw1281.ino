@@ -206,7 +206,7 @@ bool KWPReceiveBlock(char s[], int maxsize, int &size){
   if (size == 0) 
     ackeachbyte = true;
 
-  unsigned long timeout = millis() + 2000;   // this is important while switching pages to correctly reconnect to unit
+  unsigned long timeout = millis() + 1200;   // this is important while switching pages to correctly reconnect to unit
   while ((recvcount == 0) || (recvcount != size)) {
     while (obd.available()){      
       data = obdRead();
@@ -222,7 +222,7 @@ bool KWPReceiveBlock(char s[], int maxsize, int &size){
       if ((ackeachbyte) && (recvcount == 2)) {
         if (data != blockCounter){
           //Serial.println(F("ERROR: invalid blockCounter"));
-          //disconnect();
+          disconnect();
           errorData++;
           return false;
         }
@@ -486,24 +486,6 @@ bool readSensors(int group){
   return true;
 }
 
-String insertEmptyChars(String enter)
-{
-  String values = "";
-  if(enter.length() == 1)
-  {
-    values = "   ";
-  }
-  if(enter.length() == 2)
-  {
-    values = "  ";
-  }
-  if(enter.length() == 3)
-  {
-    values = " ";
-  }
-  return values;
-}
-
 void updateDisplay(){
   if (!connected){
     if ( (errorTimeout != 0) || (errorData != 0) ){
@@ -511,15 +493,18 @@ void updateDisplay(){
       lcdPrint(7,3, String(errorTimeout), 3);
       lcdPrint(10,3, F(" da="));      
       lcdPrint(14,3, String(errorData), 6);
+      errorTimeout = 0;
+      errorData = 0;
+      delay(200);
     }
   } else {
     switch (currPage){
       case 1:      // budiky          
-          lcdPrint(0,0,String(F("TEPLOTA  ")) + String(coolantTemp) + insertEmptyChars(String(coolantTemp)));                
-          lcdPrint(0,1,String(F("TLA OLEJ ")) + String(oilPressure) + insertEmptyChars(String(oilPressure)));        
-          lcdPrint(0,2,String(F("OTACKY   ")) + String(engineSpeed) + insertEmptyChars(String(engineSpeed)));        
-          lcdPrint(0,3,String(F("RYCHLOST ")) +  String(vehicleSpeed) + insertEmptyChars(String(vehicleSpeed)));      
-          lcdPrint(0,4,String(F("TEP OLEJ ")) +  String(oilTemp) + insertEmptyChars(String(oilTemp)));  
+          lcdPrint(0,0,String(F("TEPLOTA  ")) + String(coolantTemp));                
+          lcdPrint(0,1,String(F("TLA OLEJ ")) + String(oilPressure));        
+          lcdPrint(0,2,String(F("OTACKY   ")) + String(engineSpeed));        
+          lcdPrint(0,3,String(F("RYCHLOST ")) +  String(vehicleSpeed));      
+          lcdPrint(0,4,String(F("TEP OLEJ ")) +  String(oilTemp));  
           lcdPrint(7,5,String(elapsed));
         break;
       case 2:                   
@@ -559,14 +544,14 @@ void updateDisplay(){
         lcdPrint(0,3, String(F("LZ KOLO:")) + String(rearLeftWheel));
         lcdPrint(0,4, String(F("PZ KOLO:")) + String(rearRightWheel));
         break;
-        case 50:  // DEBUG BUDIKU
+/*        case 50:  // DEBUG BUDIKU
         case 51:  // DEBUG MOTORU
         case 52:  // DEBUG ABS
           lcdPrint(0,0,String(debug1));                    
           lcdPrint(0,1, String(debug2));      
           lcdPrint(0,2,String(debug3));                    
           lcdPrint(0,3, String(debug4));
-        break;  
+        break;  */
     }    
   }
 }
@@ -580,7 +565,6 @@ void setup(){
   digitalWrite(pinKLineTX, HIGH);  
   
   pinMode(pinButton, INPUT);  
-  pinMode(pinButton, INPUT_PULLUP); 
 }
 
 
@@ -642,7 +626,7 @@ start = millis();
             readSensors(1);
           }    
         break;
-        case 8:
+ /*       case 8:
             lcdPrint(7,5,String(elapsed));    
         break;
     
@@ -675,7 +659,7 @@ start = millis();
           }      
         break;
     
-          
+          */
       }    
 
   finished=millis();  
@@ -689,7 +673,7 @@ start = millis();
    delay(400);
    connected = false;
    skipnextread = true;
-   if(currPage > 7)
+   if(currPage > 6)
    {
     currPage = 1;   
    }
@@ -703,7 +687,7 @@ start = millis();
    skipnextread = true;
    if(currPage <= 0)
    {
-    currPage = 7;
+    currPage = 6;
    }
    lcdPrint(0,0, String(F("STRANA: ")) + String(currPage)  + "  ", 20);
   }
