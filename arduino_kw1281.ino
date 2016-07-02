@@ -54,40 +54,40 @@ uint8_t unitAddress = 1;
 unsigned long start, finished, elapsed;
 
 
-int8_t coolantTemp = 0; // teplota chladici kapaliny
-int8_t oilTemp = 0; // teplota oleje
-int8_t oilPressure = 0; // tlak oleje
-int8_t turboBoostSpec = 0; // pozadovany tlak turba
-int8_t turboBoostAct = 0; // aktualni tlak turba
-int8_t MAFSpec = 0; // pozadovana vaha vzduchu
-int8_t MAFAct = 0; // aktualni vaha vzduchu
-int8_t injectedQuantityAct = 0; // aktualni vstrikovane mnozstvi paliva
-int8_t injectedQuantitySpec = 0; // pozadovane mnozstvi paliva
+int coolantTemp = 0; // teplota chladici kapaliny
+int oilTemp = 0; // teplota oleje
+int oilPressure = 0; // tlak oleje
+int turboBoostSpec = 0; // pozadovany tlak turba
+int turboBoostAct = 0; // aktualni tlak turba
+int MAFSpec = 0; // pozadovana vaha vzduchu
+int MAFAct = 0; // aktualni vaha vzduchu
+int injectedQuantityAct = 0; // aktualni vstrikovane mnozstvi paliva
+int injectedQuantitySpec = 0; // pozadovane mnozstvi paliva
 float actConsumption = 0; // spotreba
-int8_t remainingDistance = 0; // dojezdova vzdalenost
+int remainingDistance = 0; // dojezdova vzdalenost
 float engineLoad = 0; // zatez motoru
-int   engineSpeed = 0; // otacky
+int   engineSpeed = 0; // otacky -- working
 float throttleValve = 0; // seslapnuti plynu
 float supplyVoltage = 0; // napeti v palubni siti
-uint8_t vehicleSpeed = 0; // rychlost vozidla
-uint8_t fuelConsumption = 0; // aktualni spotreba paliva
-uint8_t fuelLevel = 0; // zbyvajici palivo
+float vehicleSpeed = 0; // rychlost vozidla
+float fuelConsumption = 0; // aktualni spotreba paliva
+int fuelLevel = 0; // zbyvajici palivo
 unsigned long odometer = 0; // ujeta vzdalenost
 
-int8_t debug1 = 0;
-int8_t debug2 = 0;
-int8_t debug3 = 0;
-int8_t debug4 = 0;
+int debug1 = 0;
+int debug2 = 0;
+int debug3 = 0;
+int debug4 = 0;
 
 float stabCyl1 = 0;
 float stabCyl2 = 0;
 float stabCyl3 = 0;
 float stabCyl4 = 0;
 
-int8_t frontLeftWheel = 0;
-int8_t frontRightWheel = 0;
-int8_t rearLeftWheel = 0;
-int8_t rearRightWheel = 0;
+int frontLeftWheel = 0;
+int frontRightWheel = 0;
+int rearLeftWheel = 0;
+int rearRightWheel = 0;
 
 float intakeAirTemp = 0; // teplota v sani
 float fuelTemperature = 0;
@@ -128,7 +128,7 @@ uint8_t obdRead(){
   while (!obd.available()){
     if (millis() >= timeout) {
       //Serial.println(F("ERROR: obdRead timeout"));
-      //disconnect();      
+      disconnect();      
       errorTimeout++;
       return 0;
     }
@@ -187,7 +187,7 @@ bool KWPSendBlock(char *s, int size){
     if (i < size-1){
       uint8_t complement = obdRead();        
       if (complement != (data ^ 0xFF)){
-        //disconnect();
+        disconnect();
         errorData++;
         return false;
       }
@@ -206,7 +206,7 @@ bool KWPReceiveBlock(char s[], int maxsize, int &size){
   if (size == 0) 
     ackeachbyte = true;
 
-  unsigned long timeout = millis() + 1200;   // this is important while switching pages to correctly reconnect to unit
+  unsigned long timeout = millis() + 1000;   // this is important while switching pages to correctly reconnect to unit
   while ((recvcount == 0) || (recvcount != size)) {
     while (obd.available()){      
       data = obdRead();
@@ -230,7 +230,7 @@ bool KWPReceiveBlock(char s[], int maxsize, int &size){
       if ( ((!ackeachbyte) && (recvcount == size)) ||  ((ackeachbyte) && (recvcount < size)) ){
         obdWrite(data ^ 0xFF);  // send complement ack        
       }
-      timeout = millis() + 1200;        
+      timeout = millis() + 1000;        
     } 
     if (millis() >= timeout){
       disconnect();
@@ -258,7 +258,7 @@ bool connect(uint8_t addr, int baudrate){
   KWP5BaudInit(addr);
   // answer: 0x55, 0x01, 0x8A          
   char s[3];
-  lcdPrint(0,1, F("PRIJEM DAT"), 20);
+  //lcdPrint(0,1, F("PRIJEM DAT"), 20);
   int size = 3;
   if (!KWPReceiveBlock(s, 3, size)) return false;
   if (    (((uint8_t)s[0]) != 0x55) 
@@ -432,7 +432,12 @@ bool readSensors(int group){
                   case 1: turboBoostSpec = v; break;
                   case 2: turboBoostAct = v; break;
                 }              
-                break;       
+                break; 
+            case 12: // get supply voltage
+            switch(idx)
+            {
+              case 2: supplyVoltage = v; break; 
+            }
             case 13: 
                 switch (idx) // STABILIZACE VOLNOBEHU
                 {
@@ -493,9 +498,6 @@ void updateDisplay(){
       lcdPrint(7,3, String(errorTimeout), 3);
       lcdPrint(10,3, F(" da="));      
       lcdPrint(14,3, String(errorData), 6);
-      errorTimeout = 0;
-      errorData = 0;
-      delay(200);
     }
   } else {
     switch (currPage){
@@ -510,18 +512,19 @@ void updateDisplay(){
       case 2:                   
           lcdPrint(0,0,String(F("TEP SANI ")) + String(intakeAirTemp));    
           lcdPrint(0,1,String(F("OTACKY ")) + String(engineSpeed));        
-          lcdPrint(0,2,String(F("RYCHLOST ")) +  String(vehicleSpeed));           
-          lcdPrint(0,3,String(F("SPOTREBA ")) +  String(fuelConsumption));             
-          lcdPrint(0,4,String(F("NAPETI B ")) +  String(supplyVoltage));                                                
+          lcdPrint(0,2,String(F("RYCHLOST ")) +  String(vehicleSpeed));                       
+          lcdPrint(0,3,String(F("NAPETI B ")) +  String(supplyVoltage));                                                
         break;
         case 3: // TLAK TURBA - SPECIFIKOVANY A REALNY
-          lcdPrint(0,0, String(F("TURBO SP:")) + String(turboBoostSpec));                     
-          lcdPrint(0,1, String(F("TURBO AK:")) + String(turboBoostAct));                                      
+          lcdPrint(0,0, String(F("TURBO SPEC:")));
+          lcdPrint(0,1,String(turboBoostSpec),4);        
+          lcdPrint(0,2, String(F("TURBO AKT:")));                                      
+          lcdPrint(0,3,String(turboBoostAct),3);
         break;
         case 4: // MAF
-         lcdPrint(0,0, String(F("TURBO SP:")));   
+         lcdPrint(0,0, String(F("MAF SPEC:")));   
           lcdPrint(0,1,String(MAFSpec),3);
-          lcdPrint(0,2, String(F("TURBO SP:")));   
+          lcdPrint(0,2, String(F("MAF AKT:")));   
           lcdPrint(0,3,String(MAFAct),3);
         break;   
         case 5: // OTACKY - VSTRIKOVANE PALIVO - SPOTREBA
@@ -537,14 +540,14 @@ void updateDisplay(){
           lcdPrint(0,2,String(F("SANI     ")) + String(intakeAirTemp));   
           lcdPrint(0,3,String(F("MOTOR    ")) + String(coolantTemperature));  
         break;
-        case 7: // ABS rychlost kol
+      /*  case 7: // ABS rychlost kol
         lcdPrint(0,0, String(F("RYCHLOST KOL:")));
         lcdPrint(0,1, String(F("LP KOLO:")) + String(frontLeftWheel));
         lcdPrint(0,2, String(F("PP KOLO:")) + String(frontRightWheel));
         lcdPrint(0,3, String(F("LZ KOLO:")) + String(rearLeftWheel));
         lcdPrint(0,4, String(F("PZ KOLO:")) + String(rearRightWheel));
         break;
-/*        case 50:  // DEBUG BUDIKU
+        case 50:  // DEBUG BUDIKU
         case 51:  // DEBUG MOTORU
         case 52:  // DEBUG ABS
           lcdPrint(0,0,String(debug1));                    
@@ -575,7 +578,7 @@ start = millis();
       switch (currPage){
         case 1:      
           if (currAddr != ADR_Dashboard){ 
-            connect(ADR_Dashboard, 10400);    
+            connect(ADR_Dashboard, 9600);    
           } else  {
             readSensors(1);
             readSensors(2);
@@ -584,41 +587,42 @@ start = millis();
         break;
         case 2:
           if (currAddr != ADR_Engine) {
-            connect(ADR_Engine, 10400);
+            connect(ADR_Engine, 9600);
           } else {
             readSensors(3);
             readSensors(11);
+            readSensors(12);
           }    
         break;     
         case 3:
           if (currAddr != ADR_Engine) {
-            connect(ADR_Engine, 10400);
+            connect(ADR_Engine, 9600);
           } else {
             readSensors(3);
           }   
         break;   
         case 4:
           if (currAddr != ADR_Engine) {
-            connect(ADR_Engine, 10400);
+            connect(ADR_Engine, 9600);
           } else {
             readSensors(11);
           }   
         break; 
         case 5:
           if (currAddr != ADR_Engine){       
-            connect(ADR_Engine, 10400);
+            connect(ADR_Engine, 9600);
           } else  {
             readSensors(15);
           }      
         break;
         case 6:
           if (currAddr != ADR_Engine){       
-            connect(ADR_Engine, 10400);
+            connect(ADR_Engine, 9600);
           } else  {
             readSensors(7);
           }  
         break;
-        case 7:
+/*        case 7:
             if(currAddr != ADR_ABS_Brakes)
           {
             connect(ADR_ABS_Brakes, 10400);
@@ -626,7 +630,7 @@ start = millis();
             readSensors(1);
           }    
         break;
- /*       case 8:
+         case 8:
             lcdPrint(7,5,String(elapsed));    
         break;
     
